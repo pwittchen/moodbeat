@@ -1,6 +1,9 @@
 import { api, errorMessage, events, type Settings, type ToolInfo, type ToolsStatus } from '../api';
 import { formatBytes, h, icon, ICONS } from './dom';
 
+/** Models offered in the picker; the first one matches `llm::DEFAULT_MODEL`. */
+const MODELS = ['gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-5-nano', 'gpt-5-mini', 'gpt-5', 'o4-mini'];
+
 export interface SettingsPanel {
   el: HTMLElement;
   open(notice?: string): void;
@@ -28,14 +31,13 @@ export function createSettings(opts: {
   const removeKey = h('button', { class: 'text-btn', type: 'button', hidden: true }, 'Remove key');
 
   // --- Model
-  const modelInput = h('input', {
-    class: 'pill-input',
-    type: 'text',
-    autocomplete: 'off',
-    spellcheck: 'false',
-    'aria-label': 'Model',
-    id: 'model',
-  });
+  const modelInput = h('select', { class: 'pill-input pill-select', 'aria-label': 'Model', id: 'model' });
+  // A model set outside the picker (e.g. edited in config.json) stays selectable.
+  const renderModels = (current: string) => {
+    const ids = MODELS.includes(current) ? MODELS : [current, ...MODELS];
+    modelInput.replaceChildren(...ids.map((id) => h('option', { value: id }, id)));
+    modelInput.value = current;
+  };
 
   // --- Tools
   const ytDlpLine = h('span', { class: 'kv-value' });
@@ -109,7 +111,7 @@ export function createSettings(opts: {
 
   const refresh = async () => {
     settings = await api.getSettings();
-    modelInput.value = settings.model;
+    renderModels(settings.model);
     removeKey.hidden = !settings.hasApiKey;
     if (!keyStatus.classList.contains('is-error')) {
       setStatus(keyStatus, settings.hasApiKey ? 'Key saved' : '');

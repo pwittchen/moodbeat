@@ -202,8 +202,8 @@ Events carry `playlistId` so the frontend can ignore events from a replaced play
 - Endpoint: OpenAI **Responses API** (`POST /v1/responses`) with **Structured Outputs**
   (JSON schema, `strict: true`) so the response is always valid, parseable JSON.
 - Model: configurable in Settings. Default: a small, cheap, current model
-  (e.g. `gpt-4.1-mini`). The default is a constant in code, and the user can type any
-  model id.
+  (e.g. `gpt-4.1-mini`). The default is a constant in code, and the user picks from a
+  dropdown of models (a custom id set in `config.json` is kept as an extra option).
 - Temperature: moderate (≈ 0.8) — the same mood should give some variety between runs.
 - Timeout: 60 s. Retries: 1 retry on network errors / HTTP 5xx / 429 (with backoff).
   No retry on 401/403 (bad key) — show the error.
@@ -437,7 +437,7 @@ While generating: spinner instead of the icon.
 `rgba(0,0,0,0.5) 0px 8px 24px`, dark overlay behind.
 - *OpenAI API key*: masked input (pill) + show/hide; status *"Key saved"* in `#b3b3b3`
   or error in `#f3727f`.
-- *Model*: text input with the default pre-filled.
+- *Model*: dropdown of supported OpenAI models, the default pre-selected.
 - *Tools*: yt-dlp and ffmpeg versions, **Install / Update** button.
 - *Storage*: path `~/.moodbeat` and cache size, **Clear cache** button (outlined pill).
 - Buttons: **Save** (green pill, black uppercase label, letter-spacing 1.4px),
