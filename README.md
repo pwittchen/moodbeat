@@ -23,7 +23,9 @@
 </p>
 
 <p align="center">
-  <img src="screenshot.png" alt="moodbeat playing a “rain-soaked city noir” playlist" width="532">
+  <img src="screenshot_home.png" alt="moodbeat home screen with mood suggestions" width="266">
+  <img src="screenshot_playlist.png" alt="moodbeat playing a “rain-soaked city noir” playlist" width="266">
+  <img src="screenshot_settings.png" alt="moodbeat settings" width="266">
 </p>
 
 ---
