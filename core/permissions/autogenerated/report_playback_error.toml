@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-report-playback-error"
+description = "Enables the report_playback_error command without any pre-configured scope."
+commands.allow = ["report_playback_error"]
+
+[[permission]]
+identifier = "deny-report-playback-error"
+description = "Denies the report_playback_error command without any pre-configured scope."
+commands.deny = ["report_playback_error"]

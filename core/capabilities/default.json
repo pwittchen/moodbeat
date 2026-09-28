@@ -1,0 +1,28 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "moodbeat main window: app commands, event listening and title bar dragging only",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "allow-get-settings",
+    "allow-save-api-key",
+    "allow-remove-api-key",
+    "allow-set-model",
+    "allow-set-volume",
+    "allow-generate-playlist",
+    "allow-suggest-moods",
+    "allow-cancel-playlist",
+    "allow-retry-track",
+    "allow-prioritize-track",
+    "allow-track-played",
+    "allow-report-playback-error",
+    "allow-get-tools-status",
+    "allow-install-tools",
+    "allow-clear-cache"
+  ]
+}

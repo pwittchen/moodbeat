@@ -65,3 +65,12 @@ fastlane/test_output
 # Added by cargo
 
 /target
+
+# moodbeat
+node_modules/
+dist/
+core/target/
+core/gen/schemas/
+.playwright-mcp/
+
+.open_ai_api_key

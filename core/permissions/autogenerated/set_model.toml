@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-model"
+description = "Enables the set_model command without any pre-configured scope."
+commands.allow = ["set_model"]
+
+[[permission]]
+identifier = "deny-set-model"
+description = "Denies the set_model command without any pre-configured scope."
+commands.deny = ["set_model"]

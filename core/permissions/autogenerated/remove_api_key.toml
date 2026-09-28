@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-api-key"
+description = "Enables the remove_api_key command without any pre-configured scope."
+commands.allow = ["remove_api_key"]
+
+[[permission]]
+identifier = "deny-remove-api-key"
+description = "Denies the remove_api_key command without any pre-configured scope."
+commands.deny = ["remove_api_key"]

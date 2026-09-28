@@ -1,0 +1,26 @@
+/* Design tokens from DESIGN.md / SPEC §7.5. */
+:root {
+  --bg: #121212;
+  --surface: #181818;
+  --surface-2: #1f1f1f;
+  --surface-3: #252525;
+  --text: #ffffff;
+  --text-muted: #b3b3b3;
+  --border: #4d4d4d;
+  --border-light: #7c7c7c;
+  --accent: #1ed760;
+  --negative: #f3727f;
+  --warning: #ffa42b;
+
+  --font: -apple-system, system-ui, 'Helvetica Neue', Helvetica, Arial, 'Hiragino Sans',
+    'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+
+  --radius-card: 6px;
+  --radius-dialog: 8px;
+  --radius-pill: 9999px;
+
+  --shadow-heavy: rgba(0, 0, 0, 0.5) 0px 8px 24px;
+  --shadow-medium: rgba(0, 0, 0, 0.3) 0px 8px 8px;
+  --inset-border: rgb(18, 18, 18) 0px 1px 0px, rgb(124, 124, 124) 0px 0px 0px 1px inset;
+  --inset-border-focus: rgb(18, 18, 18) 0px 1px 0px, rgb(255, 255, 255) 0px 0px 0px 1px inset;
+}

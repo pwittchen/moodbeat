@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-prioritize-track"
+description = "Enables the prioritize_track command without any pre-configured scope."
+commands.allow = ["prioritize_track"]
+
+[[permission]]
+identifier = "deny-prioritize-track"
+description = "Denies the prioritize_track command without any pre-configured scope."
+commands.deny = ["prioritize_track"]

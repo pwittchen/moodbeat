@@ -33,7 +33,6 @@ All app data lives in **`~/.moodbeat/`**. The UI is minimalistic and follows
 - Editing playlists (reordering, adding, removing songs), shuffle, repeat.
 - Browsing or re-playing past playlists (history is stored, but has no UI in v1 — see §12).
 - Mobile builds.
-- Volume control inside the app (system volume is used).
 
 ---
 
@@ -111,6 +110,8 @@ with an HTML `<audio>` element — include it in v1).
 | `Enter` (in mood input) | Generate |
 | `Space` (focus outside input) | Play/Pause |
 | `→` / `←` (focus outside input) | Next / Previous |
+| `↑` / `↓` (focus outside input) | Volume up / down (5%) |
+| `M` (focus outside input) | Mute / unmute |
 | Media keys (Play/Pause, Next, Prev) | Same as buttons — nice to have, via OS media session if available |
 
 ---
@@ -174,6 +175,7 @@ with an HTML `<audio>` element — include it in v1).
 | `save_api_key` | `{ apiKey }` | `Ok` / error | Validates first, then saves |
 | `remove_api_key` | – | `Ok` | |
 | `set_model` | `{ model }` | `Ok` | |
+| `set_volume` | `{ volume, muted }` | `Ok` | Volume 0–1, persisted in config |
 | `generate_playlist` | `{ mood }` | `Playlist` | Returns after the LLM step; downloads continue in the background |
 | `cancel_playlist` | `{ playlistId }` | `Ok` | Cancels pending/running downloads |
 | `retry_track` | `{ playlistId, trackId }` | `Ok` | Re-runs resolve + download for a failed track |
@@ -391,6 +393,14 @@ are used: no sidebar, no grids, no album art.
 `rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset`, padding
 12px 48px 12px 16px. Focus: inset border becomes white.
 
+**Clear button** — "×" icon inside the input, left of Generate (circular, transparent,
+`#b3b3b3`, white on hover). Shown when a playlist is on screen or the input has text; hidden
+while generating. With only typed text it just clears the input. With a playlist it asks for
+confirmation in a modal (*"Clear playlist?"*, **Cancel** focused by default, **Clear** as a
+light pill; Escape or a backdrop click cancels). Confirming stops playback, cancels the
+playlist's downloads (`cancel_playlist`), clears the input and returns to the home screen
+(empty state) with fresh mood suggestions. The playlist file and cached audio are kept.
+
 **Generate button** — circular, Spotify Green `#1ed760` background, black arrow icon,
 inside or right next to the input. Disabled: `#1f1f1f` background, `#7c7c7c` icon.
 While generating: spinner instead of the icon.
@@ -416,6 +426,10 @@ While generating: spinner instead of the icon.
 - Controls: Prev and Next — circular, transparent background, `#b3b3b3` icon (white on
   hover). Play/Pause — circular, 48px, Spotify Green background, black icon; scales to
   1.04 on hover.
+- Volume (centered row below the controls, slider aligned under Play/Pause): speaker icon button (click → mute/unmute; icon shows
+  high/low/muted) + slider (4px track like the progress bar, white fill, green on hover).
+  Loudness follows a squared curve of the slider value. Volume and mute are saved in
+  `config.json` (`player.volume`, `player.muted`) and restored on start.
 - Disabled (no playlist): all controls `#4d4d4d`, no hover effects.
 - Buffering state: Play/Pause shows a spinner.
 
@@ -496,6 +510,10 @@ On Windows `~` resolves to `%USERPROFILE%`.
   },
   "tools": {
     "lastYtDlpUpdateCheck": "2026-09-28T19:00:00Z"
+  },
+  "player": {
+    "volume": 0.8,
+    "muted": false
   }
 }
 ```
@@ -583,7 +601,7 @@ moodbeat/
 ├── package.json
 ├── vite.config.ts
 ├── index.html
-├── src/                       # frontend
+├── ui/                        # frontend
 │   ├── main.ts                # bootstrapping, event wiring
 │   ├── api.ts                 # typed wrappers for invoke() and listen()
 │   ├── player.ts              # <audio> control, queue logic (next/prev/auto-advance)
@@ -595,7 +613,7 @@ moodbeat/
 │   └── styles/
 │       ├── tokens.css         # colors, radii, fonts from DESIGN.md
 │       └── app.css
-└── src-tauri/
+└── core/
     ├── Cargo.toml
     ├── tauri.conf.json
     ├── capabilities/default.json
@@ -629,7 +647,7 @@ moodbeat/
 
 - History screen: list of past playlists from `~/.moodbeat/playlists/`, replay from cache.
 - "More like this" — extend the current playlist.
-- Shuffle / repeat, volume slider, drag-to-reorder.
+- Shuffle / repeat, drag-to-reorder.
 - Other LLM providers (Anthropic, local models via Ollama).
 - API key stored in the OS keychain instead of `config.json`.
 - Export playlist as text / M3U.
