@@ -22,6 +22,10 @@
   <a href="./SPEC.md">Specification</a> · <a href="./DESIGN.md">Design system</a>
 </p>
 
+<p align="center">
+  <img src="screenshot.png" alt="moodbeat playing a “rain-soaked city noir” playlist" width="532">
+</p>
+
 ---
 
 ## Requirements
