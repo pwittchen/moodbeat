@@ -147,9 +147,7 @@ impl Cache {
     }
 
     pub fn record_file(&self, video_id: &str) {
-        let size = fs::metadata(self.paths.audio_file(video_id))
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let size = fs::metadata(self.paths.audio_file(video_id)).map_or(0, |m| m.len());
         self.index.lock().unwrap().files.insert(
             video_id.to_string(),
             FileEntry {
@@ -201,7 +199,7 @@ impl Cache {
                 if protected.contains(stem) {
                     continue;
                 }
-                let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                let size = e.metadata().map_or(0, |m| m.len());
                 if fs::remove_file(&path).is_ok() {
                     freed += size;
                 }

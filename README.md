@@ -48,8 +48,8 @@ npm run kill           # stop a running dev session (Vite + app)
 Tests:
 
 ```sh
-npm test                                   # frontend (player queue logic)
-cd core && cargo test                       # backend unit tests
+npm test                                         # frontend (player queue logic)
+cd core && cargo test                            # backend unit tests
 MOODBEAT_INTEGRATION=1 cargo test -- --ignored   # real YouTube search + download
 ```
 

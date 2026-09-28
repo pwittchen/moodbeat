@@ -20,7 +20,7 @@ use crate::resolver::{self, SearchError};
 use crate::tools;
 
 const WORKERS: usize = 3;
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(5);
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 const DOWNLOAD_ATTEMPTS: usize = 2;
 

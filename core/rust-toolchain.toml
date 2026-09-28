@@ -1,0 +1,6 @@
+# Pinned so local builds and CI run the same compiler and clippy lints.
+# Bump deliberately (and fix any new lints) rather than floating on "stable".
+[toolchain]
+channel = "1.98.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
