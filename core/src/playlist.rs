@@ -72,7 +72,11 @@ impl Playlist {
 
     /// e.g. `2026-09-28T21-14-03_rainy-day-in-new-york.json`
     pub fn file_name(&self) -> String {
-        format!("{}_{}.json", self.created_at.format("%Y-%m-%dT%H-%M-%S"), slugify(&self.mood))
+        format!(
+            "{}_{}.json",
+            self.created_at.format("%Y-%m-%dT%H-%M-%S"),
+            slugify(&self.mood)
+        )
     }
 
     pub fn save(&self, paths: &Paths) -> std::io::Result<()> {
@@ -92,7 +96,11 @@ impl Playlist {
 pub fn slugify(text: &str) -> String {
     let slug: String = normalize(text).replace(' ', "-").chars().take(50).collect();
     let slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() { "playlist".into() } else { slug }
+    if slug.is_empty() {
+        "playlist".into()
+    } else {
+        slug
+    }
 }
 
 #[cfg(test)]
@@ -104,13 +112,20 @@ mod tests {
     fn builds_and_names() {
         let llm = LlmPlaylist {
             title: "Rainy".into(),
-            songs: vec![Song { artist: "Sting".into(), title: "Englishman".into(), year: Some(1987) }],
+            songs: vec![Song {
+                artist: "Sting".into(),
+                title: "Englishman".into(),
+                year: Some(1987),
+            }],
         };
         let pl = Playlist::new("Rainy day in New York!", "gpt-4.1-mini", llm);
         assert_eq!(pl.tracks[0].id, "t1");
         assert_eq!(pl.tracks[0].status, TrackStatus::Pending);
         assert!(pl.file_name().ends_with("_rainy-day-in-new-york.json"));
-        assert_eq!(pl.file_name().len(), "2026-09-28T21-14-03_rainy-day-in-new-york.json".len());
+        assert_eq!(
+            pl.file_name().len(),
+            "2026-09-28T21-14-03_rainy-day-in-new-york.json".len()
+        );
 
         let json = serde_json::to_value(&pl).unwrap();
         assert_eq!(json["tracks"][0]["status"], "pending");

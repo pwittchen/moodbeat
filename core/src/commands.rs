@@ -1,5 +1,8 @@
 //! `#[tauri::command]` functions (SPEC §4.3).
 
+// Tauri commands receive owned arguments (`String`, `State<'_, _>`) by design.
+#![allow(clippy::needless_pass_by_value, reason = "Tauri command signatures")]
+
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -10,9 +13,9 @@ use crate::cache::Cache;
 use crate::config::Config;
 use crate::downloader::{EventSink, Job, ReadyEvent, StatusEvent};
 use crate::error::{AppError, AppResult};
+use crate::llm;
 use crate::paths::Paths;
 use crate::playlist::Playlist;
-use crate::llm;
 use crate::tools::{self, Tool, ToolsStatus};
 
 pub struct AppState {
@@ -53,7 +56,12 @@ impl AppState {
     }
 
     fn protected_video_ids(&self) -> HashSet<String> {
-        self.current.lock().unwrap().as_ref().map(|j| j.video_ids()).unwrap_or_default()
+        self.current
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|j| j.video_ids())
+            .unwrap_or_default()
     }
 }
 
@@ -123,7 +131,11 @@ pub fn set_model(state: State<'_, AppState>, model: String) -> AppResult<()> {
 /// Persists the player volume (0.0–1.0) and mute state.
 #[tauri::command]
 pub fn set_volume(state: State<'_, AppState>, volume: f64, muted: bool) -> AppResult<()> {
-    let volume = if volume.is_finite() { volume.clamp(0.0, 1.0) } else { 1.0 };
+    let volume = if volume.is_finite() {
+        volume.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
     state.update_config(|c| {
         c.player.volume = volume;
         c.player.muted = muted;
@@ -142,10 +154,16 @@ pub async fn generate_playlist(app: AppHandle, state: State<'_, AppState>, mood:
     let yt_dlp = tools::locate(&state.paths, Tool::YtDlp);
     let ffmpeg = tools::locate(&state.paths, Tool::Ffmpeg);
     let (Some(yt_dlp), Some(ffmpeg)) = (yt_dlp, ffmpeg) else {
-        return Err(AppError::Tools("yt-dlp and ffmpeg are required. Install them in Settings.".into()));
+        return Err(AppError::Tools(
+            "yt-dlp and ffmpeg are required. Install them in Settings.".into(),
+        ));
     };
 
-    tracing::info!("generating playlist for mood ({} chars) with {}", mood.chars().count(), cfg.openai.model);
+    tracing::info!(
+        "generating playlist for mood ({} chars) with {}",
+        mood.chars().count(),
+        cfg.openai.model
+    );
     let result = llm::generate(&state.http, &api_key, &cfg.openai.model, &mood).await;
     let llm_playlist = result.inspect_err(|e| tracing::warn!("playlist generation failed: {e}"))?;
     let playlist = Playlist::new(&mood, &cfg.openai.model, llm_playlist);
@@ -189,11 +207,10 @@ pub async fn suggest_moods(state: State<'_, AppState>) -> AppResult<Vec<String>>
 }
 
 #[tauri::command]
-pub fn cancel_playlist(state: State<'_, AppState>, playlist_id: String) -> AppResult<()> {
+pub fn cancel_playlist(state: State<'_, AppState>, playlist_id: String) {
     if let Ok(job) = state.job(&playlist_id) {
         job.cancel();
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -241,7 +258,14 @@ struct ToolsProgress {
 #[tauri::command]
 pub async fn install_tools(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let progress = move |tool: Tool, progress: f32, message: &str| {
-        let _ = app.emit("tools://progress", ToolsProgress { tool, progress, message: message.to_string() });
+        let _ = app.emit(
+            "tools://progress",
+            ToolsProgress {
+                tool,
+                progress,
+                message: message.to_string(),
+            },
+        );
     };
     tools::install(&state.paths, &state.http, &progress)
         .await

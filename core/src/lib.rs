@@ -9,6 +9,7 @@ mod playlist;
 mod resolver;
 mod tools;
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
@@ -22,6 +23,11 @@ use tools::Tool;
 
 const YT_DLP_UPDATE_INTERVAL_HOURS: i64 = 24;
 
+/// Starts the app.
+///
+/// # Panics
+///
+/// If the home directory can't be determined or the Tauri runtime fails to start.
 pub fn run() {
     let paths = Paths::from_home().expect("home directory");
     if let Err(e) = paths.ensure() {
@@ -42,7 +48,7 @@ pub fn run() {
         http: llm::http_client(),
         current: Mutex::new(None),
         generating: tokio::sync::Mutex::new(()),
-        recent_suggestions: Mutex::new(Default::default()),
+        recent_suggestions: Mutex::new(VecDeque::new()),
     };
 
     tauri::Builder::default()
@@ -85,7 +91,11 @@ fn init_logging(paths: &Paths) -> Option<tracing_appender::non_blocking::WorkerG
     let (writer, guard) = tracing_appender::non_blocking(appender);
     let filter = tracing_subscriber::EnvFilter::try_from_env("MOODBEAT_LOG")
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("moodbeat_lib=info,warn"));
-    tracing_subscriber::fmt().with_env_filter(filter).with_writer(writer).with_ansi(false).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(writer)
+        .with_ansi(false)
+        .init();
     Some(guard)
 }
 

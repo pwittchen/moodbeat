@@ -17,7 +17,15 @@ const MAX_DURATION: f64 = 15.0 * 60.0;
 const LONG_DURATION: f64 = 8.0 * 60.0;
 
 const BAD_WORDS: &[&str] = &[
-    "live", "cover", "karaoke", "remix", "reaction", "8d", "slowed", "sped up", "nightcore",
+    "live",
+    "cover",
+    "karaoke",
+    "remix",
+    "reaction",
+    "8d",
+    "slowed",
+    "sped up",
+    "nightcore",
     "instrumental",
 ];
 
@@ -59,7 +67,7 @@ pub async fn search(
     let child = cmd.spawn().map_err(|e| SearchError::Failed(e.to_string()))?;
 
     let output = tokio::select! {
-        _ = cancel.cancelled() => return Err(SearchError::Cancelled),
+        () = cancel.cancelled() => return Err(SearchError::Cancelled),
         r = tokio::time::timeout(SEARCH_TIMEOUT, child.wait_with_output()) => match r {
             Err(_) => return Err(SearchError::Failed("timed out".into())),
             Ok(Err(e)) => return Err(SearchError::Failed(e.to_string())),
@@ -100,7 +108,11 @@ pub fn normalize(s: &str) -> String {
                 '&' => " and ",
                 _ => "",
             };
-            if mapped.is_empty() { vec![c] } else { mapped.chars().collect() }
+            if mapped.is_empty() {
+                vec![c]
+            } else {
+                mapped.chars().collect()
+            }
         })
         .flat_map(char::to_lowercase)
         .map(|c| if c.is_alphanumeric() { c } else { ' ' })
@@ -135,15 +147,18 @@ pub fn score(artist: &str, title: &str, r: &SearchResult) -> Option<i32> {
     let artist_compact = n_artist.replace(' ', "");
     let channel_compact = n_channel.replace(' ', "");
     let is_topic = n_channel == format!("{n_artist} topic");
-    let is_vevo = channel_compact == format!("{artist_compact}vevo")
-        || channel_compact == format!("{artist_compact}official");
+    let is_vevo =
+        channel_compact == format!("{artist_compact}vevo") || channel_compact == format!("{artist_compact}official");
     if is_topic || is_vevo {
         score += 25;
     } else if channel_compact == artist_compact && !artist_compact.is_empty() {
         score += 20;
     }
 
-    if ["official audio", "official video", "official music video"].iter().any(|p| n_video.contains(p)) {
+    if ["official audio", "official video", "official music video"]
+        .iter()
+        .any(|p| n_video.contains(p))
+    {
         score += 10;
     }
 
@@ -186,7 +201,10 @@ mod tests {
     #[test]
     fn normalizes() {
         assert_eq!(normalize("Beyoncé — Crazy in Love!"), "beyonce crazy in love");
-        assert_eq!(normalize("Czesław Niemen: Dziwny jest ten świat"), "czeslaw niemen dziwny jest ten swiat");
+        assert_eq!(
+            normalize("Czesław Niemen: Dziwny jest ten świat"),
+            "czeslaw niemen dziwny jest ten swiat"
+        );
         assert_eq!(normalize("Guns N' Roses"), "guns n roses");
     }
 

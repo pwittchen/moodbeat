@@ -15,6 +15,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/pwittchen/moodbeat/actions/workflows/ci.yml"><img src="https://github.com/pwittchen/moodbeat/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+<p align="center">
   <a href="./SPEC.md">Specification</a> · <a href="./DESIGN.md">Design system</a>
 </p>
 

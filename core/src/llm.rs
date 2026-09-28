@@ -88,7 +88,12 @@ pub fn build_request(model: &str, mood: &str, with_temperature: bool) -> Value {
 
 /// Trims and caps the mood at [`MAX_MOOD_CHARS`] characters.
 pub fn clean_mood(mood: &str) -> String {
-    mood.trim().chars().take(MAX_MOOD_CHARS).collect::<String>().trim().to_string()
+    mood.trim()
+        .chars()
+        .take(MAX_MOOD_CHARS)
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 pub fn http_client() -> reqwest::Client {
@@ -115,12 +120,7 @@ pub async fn validate_key(http: &reqwest::Client, api_key: &str) -> AppResult<()
     Err(map_status(status, &body))
 }
 
-pub async fn generate(
-    http: &reqwest::Client,
-    api_key: &str,
-    model: &str,
-    mood: &str,
-) -> AppResult<LlmPlaylist> {
+pub async fn generate(http: &reqwest::Client, api_key: &str, model: &str, mood: &str) -> AppResult<LlmPlaylist> {
     let mut with_temperature = true;
     let mut retried = false;
     loop {
@@ -131,9 +131,7 @@ pub async fn generate(
                 return parse_and_process(&text);
             }
             // Reasoning models reject `temperature`; retry once without it.
-            Err(Failure::Status(StatusCode::BAD_REQUEST, msg))
-                if with_temperature && msg.contains("temperature") =>
-            {
+            Err(Failure::Status(StatusCode::BAD_REQUEST, msg)) if with_temperature && msg.contains("temperature") => {
                 tracing::info!("model {model} does not support temperature, retrying without it");
                 with_temperature = false;
             }
@@ -187,9 +185,8 @@ async fn send(http: &reqwest::Client, api_key: &str, body: &Value, timeout: Dura
         tracing::warn!("OpenAI HTTP {status}: {}", redact(&api_error_message(&text)));
         return Err(Failure::Status(status, api_error_message(&text)));
     }
-    serde_json::from_str(&text).map_err(|e| {
-        Failure::Status(StatusCode::BAD_GATEWAY, format!("invalid JSON from OpenAI: {e}"))
-    })
+    serde_json::from_str(&text)
+        .map_err(|e| Failure::Status(StatusCode::BAD_GATEWAY, format!("invalid JSON from OpenAI: {e}")))
 }
 
 fn api_error_message(body: &str) -> String {
@@ -244,7 +241,11 @@ pub fn post_process(raw: LlmPlaylist) -> AppResult<LlmPlaylist> {
     let songs: Vec<Song> = raw
         .songs
         .into_iter()
-        .map(|s| Song { artist: s.artist.trim().to_string(), title: s.title.trim().to_string(), year: s.year })
+        .map(|s| Song {
+            artist: s.artist.trim().to_string(),
+            title: s.title.trim().to_string(),
+            year: s.year,
+        })
         .filter(|s| !s.artist.is_empty() && !s.title.is_empty())
         .filter(|s| seen.insert(format!("{}|{}", s.artist.to_lowercase(), s.title.to_lowercase())))
         .take(MAX_SONGS)
@@ -274,11 +275,30 @@ surprising; avoid clichés and anything in the avoid list.";
 
 /// Angles mixed into each request so repeated calls don't converge on the same ideas.
 const INSPIRATIONS: &[&str] = &[
-    "a city or country", "a decade", "a season or holiday", "the weather", "a time of day",
-    "an everyday activity", "a feeling", "a film or book atmosphere", "a music genre or subgenre",
-    "a journey or means of transport", "a food or drink", "nature or a landscape", "a party or celebration",
-    "sport or workout", "work or study focus", "a place indoors", "nostalgia", "a colour or texture",
+    "a city or country",
+    "a decade",
+    "a season or holiday",
+    "the weather",
+    "a time of day",
+    "an everyday activity",
+    "a feeling",
+    "a film or book atmosphere",
+    "a music genre or subgenre",
+    "a journey or means of transport",
+    "a food or drink",
+    "nature or a landscape",
+    "a party or celebration",
+    "sport or workout",
+    "work or study focus",
+    "a place indoors",
+    "nostalgia",
+    "a colour or texture",
 ];
+
+#[derive(Deserialize)]
+struct RawSuggestions {
+    moods: Vec<String>,
+}
 
 pub fn suggest_schema() -> Value {
     json!({
@@ -314,7 +334,11 @@ pub fn build_suggest_request(model: &str, inspirations: &[&str], avoid: &[String
     let user = format!(
         "Draw inspiration from: {}.\nAvoid these (already shown): {}.",
         inspirations.join("; "),
-        if avoid.is_empty() { "nothing".to_string() } else { avoid.join("; ") },
+        if avoid.is_empty() {
+            "nothing".to_string()
+        } else {
+            avoid.join("; ")
+        },
     );
     let mut body = json!({
         "model": model,
@@ -363,11 +387,7 @@ pub async fn suggest_moods(
         match send(http, api_key, &body, SUGGEST_TIMEOUT).await {
             Ok(resp) => {
                 let text = extract_output_text(&resp)?;
-                #[derive(Deserialize)]
-                struct Raw {
-                    moods: Vec<String>,
-                }
-                let raw: Raw = serde_json::from_str(&text)
+                let raw: RawSuggestions = serde_json::from_str(&text)
                     .map_err(|_| AppError::OpenAi("unexpected suggestions format".into()))?;
                 let moods = clean_suggestions(raw.moods, avoid);
                 if moods.is_empty() {
@@ -388,11 +408,17 @@ mod tests {
     use super::*;
 
     fn song(a: &str, t: &str) -> Song {
-        Song { artist: a.into(), title: t.into(), year: None }
+        Song {
+            artist: a.into(),
+            title: t.into(),
+            year: None,
+        }
     }
 
     fn songs(n: usize) -> Vec<Song> {
-        (0..n).map(|i| song(&format!("Artist {i}"), &format!("Song {i}"))).collect()
+        (0..n)
+            .map(|i| song(&format!("Artist {i}"), &format!("Song {i}")))
+            .collect()
     }
 
     #[test]
@@ -404,7 +430,11 @@ mod tests {
             song("No title", "   "),
         ];
         list.extend(songs(5));
-        let out = post_process(LlmPlaylist { title: " Rainy ".into(), songs: list }).unwrap();
+        let out = post_process(LlmPlaylist {
+            title: " Rainy ".into(),
+            songs: list,
+        })
+        .unwrap();
         assert_eq!(out.title, "Rainy");
         assert_eq!(out.songs.len(), 6);
         assert_eq!(out.songs[0], song("Sting", "Englishman in New York"));
@@ -412,16 +442,27 @@ mod tests {
 
     #[test]
     fn caps_at_fifteen() {
-        let out = post_process(LlmPlaylist { title: "x".into(), songs: songs(20) }).unwrap();
+        let out = post_process(LlmPlaylist {
+            title: "x".into(),
+            songs: songs(20),
+        })
+        .unwrap();
         assert_eq!(out.songs.len(), 15);
         assert_eq!(out.songs[14].title, "Song 14");
     }
 
     #[test]
     fn accepts_five_rejects_four() {
-        assert!(post_process(LlmPlaylist { title: "x".into(), songs: songs(5) }).is_ok());
+        assert!(post_process(LlmPlaylist {
+            title: "x".into(),
+            songs: songs(5)
+        })
+        .is_ok());
         assert!(matches!(
-            post_process(LlmPlaylist { title: "x".into(), songs: songs(4) }),
+            post_process(LlmPlaylist {
+                title: "x".into(),
+                songs: songs(4)
+            }),
             Err(AppError::TooFewSongs)
         ));
     }
@@ -451,7 +492,8 @@ mod tests {
 
     #[test]
     fn refusal_and_garbage_are_errors() {
-        let refusal = json!({ "output": [ { "type": "message", "content": [ { "type": "refusal", "refusal": "no" } ] } ] });
+        let refusal =
+            json!({ "output": [ { "type": "message", "content": [ { "type": "refusal", "refusal": "no" } ] } ] });
         assert!(matches!(extract_output_text(&refusal), Err(AppError::TooFewSongs)));
         assert!(matches!(parse_and_process("not json"), Err(AppError::TooFewSongs)));
     }
@@ -473,8 +515,14 @@ mod tests {
 
     #[test]
     fn status_mapping() {
-        assert!(matches!(map_status(StatusCode::UNAUTHORIZED, ""), AppError::InvalidApiKey));
-        assert!(matches!(map_status(StatusCode::TOO_MANY_REQUESTS, ""), AppError::RateLimited));
+        assert!(matches!(
+            map_status(StatusCode::UNAUTHORIZED, ""),
+            AppError::InvalidApiKey
+        ));
+        assert!(matches!(
+            map_status(StatusCode::TOO_MANY_REQUESTS, ""),
+            AppError::RateLimited
+        ));
         let e = map_status(StatusCode::BAD_REQUEST, r#"{"error":{"message":"bad sk-abc"}}"#);
         assert_eq!(e.to_string(), "OpenAI error: bad sk-***");
     }
@@ -495,7 +543,7 @@ mod tests {
             "  \"Late Night Drive Through Tokyo.\" ".to_string(),
             "sunday   morning coffee".to_string(),
             "late night drive through tokyo".to_string(),
-            "".to_string(),
+            String::new(),
             "x".repeat(41),
             "90s rock".to_string(),
             "rainy lisbon tram".to_string(),
@@ -513,7 +561,12 @@ mod tests {
         let user = body["input"][1]["content"].as_str().unwrap();
         assert!(user.contains("a decade; the weather"));
         assert!(user.contains("90s rock"));
-        assert_eq!(body["text"]["format"]["schema"]["properties"]["moods"]["maxItems"], json!(3));
-        assert!(build_suggest_request("o4-mini", &[], &[], false).get("temperature").is_none());
+        assert_eq!(
+            body["text"]["format"]["schema"]["properties"]["moods"]["maxItems"],
+            json!(3)
+        );
+        assert!(build_suggest_request("o4-mini", &[], &[], false)
+            .get("temperature")
+            .is_none());
     }
 }

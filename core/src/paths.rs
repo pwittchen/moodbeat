@@ -17,8 +17,8 @@ pub struct Paths {
 
 impl Paths {
     pub fn from_home() -> io::Result<Self> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory not found"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory not found"))?;
         Ok(Self::new(home.join(".moodbeat")))
     }
 
@@ -38,7 +38,14 @@ impl Paths {
 
     /// Creates the directory tree; the root is owner-only (`0700`) on unix.
     pub fn ensure(&self) -> io::Result<()> {
-        for dir in [&self.root, &self.bin, &self.cache, &self.audio, &self.playlists, &self.logs] {
+        for dir in [
+            &self.root,
+            &self.bin,
+            &self.cache,
+            &self.audio,
+            &self.playlists,
+            &self.logs,
+        ] {
             fs::create_dir_all(dir)?;
         }
         set_mode(&self.root, 0o700)

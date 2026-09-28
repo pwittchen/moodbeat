@@ -49,17 +49,12 @@ pub fn song_key(artist: &str, title: &str) -> String {
 }
 
 /// Least recently used first, skipping protected ids, until the total fits `max_bytes`.
-pub fn plan_eviction(
-    files: &BTreeMap<String, FileEntry>,
-    max_bytes: u64,
-    protected: &HashSet<String>,
-) -> Vec<String> {
+pub fn plan_eviction(files: &BTreeMap<String, FileEntry>, max_bytes: u64, protected: &HashSet<String>) -> Vec<String> {
     let mut total: u64 = files.values().map(|f| f.size_bytes).sum();
     if total <= max_bytes {
         return vec![];
     }
-    let mut candidates: Vec<(&String, &FileEntry)> =
-        files.iter().filter(|(id, _)| !protected.contains(*id)).collect();
+    let mut candidates: Vec<(&String, &FileEntry)> = files.iter().filter(|(id, _)| !protected.contains(*id)).collect();
     candidates.sort_by_key(|(_, f)| f.last_used());
     let mut evict = vec![];
     for (id, f) in candidates {
@@ -108,7 +103,11 @@ impl Cache {
             });
             entry.size_bytes = size;
         }
-        let cache = Self { paths: paths.clone(), index: Mutex::new(index), locks: Mutex::new(HashMap::new()) };
+        let cache = Self {
+            paths: paths.clone(),
+            index: Mutex::new(index),
+            locks: Mutex::new(HashMap::new()),
+        };
         cache.persist();
         cache
     }
@@ -121,7 +120,12 @@ impl Cache {
     }
 
     pub fn video_lock(&self, video_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        self.locks.lock().unwrap().entry(video_id.to_string()).or_default().clone()
+        self.locks
+            .lock()
+            .unwrap()
+            .entry(video_id.to_string())
+            .or_default()
+            .clone()
     }
 
     pub fn lookup_song(&self, artist: &str, title: &str) -> Option<SongEntry> {
@@ -143,10 +147,16 @@ impl Cache {
     }
 
     pub fn record_file(&self, video_id: &str) {
-        let size = fs::metadata(self.paths.audio_file(video_id)).map(|m| m.len()).unwrap_or(0);
+        let size = fs::metadata(self.paths.audio_file(video_id))
+            .map(|m| m.len())
+            .unwrap_or(0);
         self.index.lock().unwrap().files.insert(
             video_id.to_string(),
-            FileEntry { size_bytes: size, added_at: Utc::now(), last_played: None },
+            FileEntry {
+                size_bytes: size,
+                added_at: Utc::now(),
+                last_played: None,
+            },
         );
         self.persist();
     }
@@ -183,7 +193,11 @@ impl Cache {
         if let Ok(entries) = fs::read_dir(&self.paths.audio) {
             for e in entries.flatten() {
                 let path = e.path();
-                let stem = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.split('.').next()).unwrap_or("");
+                let stem = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|n| n.split('.').next())
+                    .unwrap_or("");
                 if protected.contains(stem) {
                     continue;
                 }
@@ -243,7 +257,14 @@ mod tests {
 
         let cache = Cache::load(&paths);
         assert_eq!(cache.total_bytes(), 30);
-        cache.remember_song("Sting", "Fragile", SongEntry { video_id: "keep".into(), duration_sec: Some(200) });
+        cache.remember_song(
+            "Sting",
+            "Fragile",
+            SongEntry {
+                video_id: "keep".into(),
+                duration_sec: Some(200),
+            },
+        );
         assert_eq!(cache.lookup_song("sting", "FRAGILE!").unwrap().video_id, "keep");
 
         let freed = cache.clear(&["keep".to_string()].into());

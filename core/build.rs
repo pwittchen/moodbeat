@@ -20,8 +20,7 @@ fn main() {
     // Registering an app manifest makes every command opt-in: only the commands
     // granted in capabilities/default.json can be invoked by the frontend (SPEC §10).
     tauri_build::try_build(
-        tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
+        tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
     )
     .expect("failed to run tauri-build");
 }

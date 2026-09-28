@@ -116,7 +116,13 @@ impl Job {
     }
 
     pub fn video_ids(&self) -> HashSet<String> {
-        self.playlist.lock().unwrap().tracks.iter().filter_map(|t| t.video_id.clone()).collect()
+        self.playlist
+            .lock()
+            .unwrap()
+            .tracks
+            .iter()
+            .filter_map(|t| t.video_id.clone())
+            .collect()
     }
 
     /// Moves a pending track to the front of the queue.
@@ -133,7 +139,9 @@ impl Job {
         if self.is_cancelled() {
             return Err(AppError::Invalid("This playlist is no longer active".into()));
         }
-        let track = self.track(track_id).ok_or_else(|| AppError::Invalid("Unknown track".into()))?;
+        let track = self
+            .track(track_id)
+            .ok_or_else(|| AppError::Invalid("Unknown track".into()))?;
         if track.status != TrackStatus::Failed {
             return Ok(());
         }
@@ -166,12 +174,13 @@ impl Job {
                 return;
             }
             let next = self.queue.lock().unwrap().pop_front();
-            match next {
-                Some(track_id) => self.process(&track_id).await,
-                None => tokio::select! {
-                    _ = self.cancel.cancelled() => return,
-                    _ = self.notify.notified() => {}
-                },
+            if let Some(track_id) = next {
+                self.process(&track_id).await;
+            } else {
+                tokio::select! {
+                    () = self.cancel.cancelled() => return,
+                    () = self.notify.notified() => {}
+                }
             }
         }
     }
@@ -197,7 +206,7 @@ impl Job {
                     Some(best) => {
                         let entry = SongEntry {
                             video_id: best.id,
-                            duration_sec: best.duration.map(|d| d.round() as u32),
+                            duration_sec: best.duration.map(whole_seconds),
                         };
                         self.cache.remember_song(&track.artist, &track.title, entry.clone());
                         entry
@@ -214,7 +223,7 @@ impl Job {
         // Serialize work on the same file across playlists and duplicate songs.
         let lock = self.cache.video_lock(&video_id);
         let _guard = tokio::select! {
-            _ = self.cancel.cancelled() => return,
+            () = self.cancel.cancelled() => return,
             guard = lock.lock_owned() => guard,
         };
 
@@ -225,13 +234,20 @@ impl Job {
         self.set_status(track_id, TrackStatus::Downloading, Some(0.0));
         let mut last_error = String::new();
         for attempt in 1..=DOWNLOAD_ATTEMPTS {
-            let mut last_emit = Instant::now() - PROGRESS_INTERVAL;
-            let result = download(&self.yt_dlp, &self.ffmpeg, &self.paths.audio, &video_id, &self.cancel, |p| {
-                if last_emit.elapsed() >= PROGRESS_INTERVAL {
-                    last_emit = Instant::now();
-                    self.emit_status(track_id, TrackStatus::Downloading, Some(p), None);
-                }
-            })
+            let mut last_emit: Option<Instant> = None;
+            let result = download(
+                &self.yt_dlp,
+                &self.ffmpeg,
+                &self.paths.audio,
+                &video_id,
+                &self.cancel,
+                |p| {
+                    if last_emit.is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL) {
+                        last_emit = Some(Instant::now());
+                        self.emit_status(track_id, TrackStatus::Downloading, Some(p), None);
+                    }
+                },
+            )
             .await;
             match result {
                 Ok(()) => {
@@ -324,6 +340,23 @@ pub enum DownloadError {
     Failed(String),
 }
 
+/// How a yt-dlp run ended.
+enum Outcome {
+    Cancelled,
+    TimedOut,
+    Exited(std::io::Result<std::process::ExitStatus>),
+}
+
+/// Rounds a yt-dlp duration (seconds, float) to whole seconds.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "clamped to the u32 range before casting"
+)]
+fn whole_seconds(d: f64) -> u32 {
+    d.round().clamp(0.0, f64::from(u32::MAX)) as u32
+}
+
 /// `[download]  42.3% of ...` → `42.3`
 pub fn parse_progress(line: &str) -> Option<f32> {
     let rest = line.trim_start().strip_prefix("[download]")?.trim_start();
@@ -340,7 +373,10 @@ pub async fn download(
     cancel: &CancellationToken,
     mut on_progress: impl FnMut(f32),
 ) -> Result<(), DownloadError> {
-    let template = format!("{}/{video_id}.%(ext)s", audio_dir.display().to_string().replace('%', "%%"));
+    let template = format!(
+        "{}/{video_id}.%(ext)s",
+        audio_dir.display().to_string().replace('%', "%%")
+    );
     let mut cmd = tools::command(yt_dlp);
     cmd.args(["-f", "bestaudio", "-x", "--audio-format", "mp3", "--audio-quality", "0"])
         .arg("--ffmpeg-location")
@@ -362,11 +398,6 @@ pub async fn download(
         buf
     });
 
-    enum Outcome {
-        Cancelled,
-        TimedOut,
-        Exited(std::io::Result<std::process::ExitStatus>),
-    }
     let outcome = {
         let run = async {
             let mut lines = BufReader::new(stdout).lines();
@@ -378,7 +409,7 @@ pub async fn download(
             child.wait().await
         };
         tokio::select! {
-            _ = cancel.cancelled() => Outcome::Cancelled,
+            () = cancel.cancelled() => Outcome::Cancelled,
             r = tokio::time::timeout(DOWNLOAD_TIMEOUT, run) => match r {
                 Err(_) => Outcome::TimedOut,
                 Ok(status) => Outcome::Exited(status),
@@ -399,8 +430,10 @@ pub async fn download(
                 .rev()
                 .find(|l| l.contains("ERROR"))
                 .or_else(|| stderr.lines().rev().find(|l| !l.trim().is_empty()))
-                .map(|l| l.trim().trim_start_matches("ERROR:").trim().to_string())
-                .unwrap_or_else(|| format!("yt-dlp exited with {status}"));
+                .map_or_else(
+                    || format!("yt-dlp exited with {status}"),
+                    |l| l.trim().trim_start_matches("ERROR:").trim().to_string(),
+                );
             Err(DownloadError::Failed(reason))
         }
     };
@@ -428,9 +461,18 @@ mod tests {
 
     #[test]
     fn parses_progress_lines() {
-        assert_eq!(parse_progress("[download]  42.3% of    3.61MiB at    1.20MiB/s ETA 00:01"), Some(42.3));
-        assert_eq!(parse_progress("[download] 100% of    3.61MiB in 00:00:02 at 1.5MiB/s"), Some(100.0));
-        assert_eq!(parse_progress("[download]   0.0% of ~  3.61MiB at  Unknown B/s ETA Unknown"), Some(0.0));
+        assert_eq!(
+            parse_progress("[download]  42.3% of    3.61MiB at    1.20MiB/s ETA 00:01"),
+            Some(42.3)
+        );
+        assert_eq!(
+            parse_progress("[download] 100% of    3.61MiB in 00:00:02 at 1.5MiB/s"),
+            Some(100.0)
+        );
+        assert_eq!(
+            parse_progress("[download]   0.0% of ~  3.61MiB at  Unknown B/s ETA Unknown"),
+            Some(0.0)
+        );
         assert_eq!(parse_progress("[download] Destination: /x/abc.webm"), None);
         assert_eq!(parse_progress("[ExtractAudio] Destination: /x/abc.mp3"), None);
         assert_eq!(parse_progress("[youtube] abc: Downloading webpage"), None);
@@ -467,7 +509,7 @@ mod integration {
     use crate::tools::{locate, Tool};
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "downloads from YouTube; run with MOODBEAT_INTEGRATION=1"]
     async fn resolves_and_downloads_one_track() {
         if std::env::var("MOODBEAT_INTEGRATION").is_err() {
             return;
@@ -479,11 +521,15 @@ mod integration {
         let ffmpeg = locate(&paths, Tool::Ffmpeg).expect("ffmpeg installed");
         let cancel = CancellationToken::new();
 
-        let results = resolver::search(&yt_dlp, "Ramones", "Blitzkrieg Bop", &cancel).await.unwrap();
+        let results = resolver::search(&yt_dlp, "Ramones", "Blitzkrieg Bop", &cancel)
+            .await
+            .unwrap();
         let best = resolver::pick_best("Ramones", "Blitzkrieg Bop", &results).expect("a match");
 
         let mut updates = vec![];
-        download(&yt_dlp, &ffmpeg, &paths.audio, &best.id, &cancel, |p| updates.push(p)).await.unwrap();
+        download(&yt_dlp, &ffmpeg, &paths.audio, &best.id, &cancel, |p| updates.push(p))
+            .await
+            .unwrap();
         assert!(paths.audio_file(&best.id).metadata().unwrap().len() > 100_000);
         assert!(!updates.is_empty(), "no progress parsed");
         let leftovers = std::fs::read_dir(&paths.audio).unwrap().count();

@@ -1,0 +1,2 @@
+# Product names that are not code identifiers (".." keeps the default list).
+doc-valid-idents = ["OpenAI", "YouTube", "WebView", ".."]

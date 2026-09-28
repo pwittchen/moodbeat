@@ -60,7 +60,10 @@ pub struct PlayerConfig {
 
 impl Default for PlayerConfig {
     fn default() -> Self {
-        Self { volume: default_volume(), muted: false }
+        Self {
+            volume: default_volume(),
+            muted: false,
+        }
     }
 }
 
@@ -92,13 +95,18 @@ impl Default for Config {
 
 impl Default for OpenAiConfig {
     fn default() -> Self {
-        Self { api_key: None, model: default_model() }
+        Self {
+            api_key: None,
+            model: default_model(),
+        }
     }
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        Self { max_size_mb: DEFAULT_CACHE_MAX_MB }
+        Self {
+            max_size_mb: DEFAULT_CACHE_MAX_MB,
+        }
     }
 }
 
@@ -112,7 +120,7 @@ impl std::fmt::Debug for Config {
             .field("cache_max_mb", &self.cache.max_size_mb)
             .field("volume", &self.player.volume)
             .field("muted", &self.player.muted)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -120,8 +128,9 @@ impl Config {
     /// Loads the config; a missing file yields defaults.
     pub fn load(path: &Path) -> std::io::Result<Self> {
         match fs::read(path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            Ok(bytes) => {
+                serde_json::from_slice(&bytes).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(e),
         }
@@ -158,7 +167,7 @@ mod tests {
         assert_eq!(cfg, Config::default());
         assert_eq!(cfg.openai.model, DEFAULT_MODEL);
         assert_eq!(cfg.cache.max_size_mb, 2048);
-        assert_eq!(cfg.player.volume, 1.0);
+        assert!((cfg.player.volume - 1.0).abs() < f64::EPSILON);
         assert!(!cfg.player.muted);
     }
 
@@ -169,7 +178,10 @@ mod tests {
         let mut cfg = Config::default();
         cfg.openai.api_key = Some("sk-test".into());
         cfg.openai.model = "gpt-x".into();
-        cfg.player = PlayerConfig { volume: 0.35, muted: true };
+        cfg.player = PlayerConfig {
+            volume: 0.35,
+            muted: true,
+        };
         cfg.save(&path).unwrap();
 
         assert_eq!(Config::load(&path).unwrap(), cfg);

@@ -28,7 +28,11 @@ impl Tool {
     }
 
     fn exe_name(self) -> String {
-        if cfg!(windows) { format!("{}.exe", self.name()) } else { self.name().to_string() }
+        if cfg!(windows) {
+            format!("{}.exe", self.name())
+        } else {
+            self.name().to_string()
+        }
     }
 
     fn version_arg(self) -> &'static str {
@@ -60,15 +64,30 @@ fn yt_dlp_asset() -> Option<&'static str> {
 /// Static ffmpeg build (gzip) and its pinned SHA-256.
 fn ffmpeg_asset() -> Option<(&'static str, &'static str)> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        Some(("ffmpeg-darwin-arm64.gz", "6be74d6f449889c2e87a75873894f8520cad56c08ac76f2a628d85b0519daaca"))
+        Some((
+            "ffmpeg-darwin-arm64.gz",
+            "6be74d6f449889c2e87a75873894f8520cad56c08ac76f2a628d85b0519daaca",
+        ))
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        Some(("ffmpeg-darwin-x64.gz", "a12354fce7eb62361473bbe10d53a1893695babd35869ec8e92e5dfea8d0440b"))
+        Some((
+            "ffmpeg-darwin-x64.gz",
+            "a12354fce7eb62361473bbe10d53a1893695babd35869ec8e92e5dfea8d0440b",
+        ))
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some(("ffmpeg-linux-x64.gz", "17c1ae10b52ac499180679fe6ba77e17642390c4eedb0f1e3b0ac045da55128f"))
+        Some((
+            "ffmpeg-linux-x64.gz",
+            "17c1ae10b52ac499180679fe6ba77e17642390c4eedb0f1e3b0ac045da55128f",
+        ))
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        Some(("ffmpeg-linux-arm64.gz", "2b708b2d15041d2a192c1db24c7a8a1d24f645a8242dce1c744ff2392b86ada1"))
+        Some((
+            "ffmpeg-linux-arm64.gz",
+            "2b708b2d15041d2a192c1db24c7a8a1d24f645a8242dce1c744ff2392b86ada1",
+        ))
     } else if cfg!(all(windows, target_arch = "x86_64")) {
-        Some(("ffmpeg-win32-x64.gz", "450d66226c79405c724e821f291cab0911e934bfa9fa2231adcab587f3e07b50"))
+        Some((
+            "ffmpeg-win32-x64.gz",
+            "450d66226c79405c724e821f291cab0911e934bfa9fa2231adcab587f3e07b50",
+        ))
     } else {
         None
     }
@@ -125,7 +144,11 @@ pub fn parse_version(tool: Tool, stdout: &str) -> Option<String> {
     match tool {
         Tool::YtDlp => Some(first.to_string()).filter(|s| !s.is_empty()),
         // "ffmpeg version 6.0-static https://johnvansickle.com/ffmpeg/  Copyright ..."
-        Tool::Ffmpeg => first.strip_prefix("ffmpeg version ")?.split_whitespace().next().map(str::to_string),
+        Tool::Ffmpeg => first
+            .strip_prefix("ffmpeg version ")?
+            .split_whitespace()
+            .next()
+            .map(str::to_string),
     }
 }
 
@@ -158,12 +181,19 @@ async fn info(paths: &Paths, tool: Tool) -> ToolInfo {
             managed: p == managed_path(paths, tool),
             path: Some(p.display().to_string()),
         },
-        None => ToolInfo { version: None, path: None, managed: false },
+        None => ToolInfo {
+            version: None,
+            path: None,
+            managed: false,
+        },
     }
 }
 
 pub async fn status(paths: &Paths) -> ToolsStatus {
-    ToolsStatus { yt_dlp: info(paths, Tool::YtDlp).await, ffmpeg: info(paths, Tool::Ffmpeg).await }
+    ToolsStatus {
+        yt_dlp: info(paths, Tool::YtDlp).await,
+        ffmpeg: info(paths, Tool::Ffmpeg).await,
+    }
 }
 
 /// Installs missing tools into `~/.moodbeat/bin/` and updates a managed yt-dlp.
@@ -180,7 +210,7 @@ pub async fn install(
         let tmp = dest.with_extension("part");
         progress(Tool::YtDlp, 0.0, "Downloading yt-dlp…");
         download(http, &format!("{YT_DLP_BASE}/{asset}"), &tmp, None, |p| {
-            progress(Tool::YtDlp, p, "Downloading yt-dlp…")
+            progress(Tool::YtDlp, p, "Downloading yt-dlp…");
         })
         .await
         .map_err(|e| AppError::Tools(format!("Couldn't download yt-dlp: {e}")))?;
@@ -201,7 +231,7 @@ pub async fn install(
         let gz = paths.bin.join("ffmpeg.gz.part");
         progress(Tool::Ffmpeg, 0.0, "Downloading ffmpeg…");
         let result = download(http, &format!("{FFMPEG_BASE}/{asset}"), &gz, Some(sha), |p| {
-            progress(Tool::Ffmpeg, p * 0.95, "Downloading ffmpeg…")
+            progress(Tool::Ffmpeg, p * 0.95, "Downloading ffmpeg…");
         })
         .await;
         if let Err(e) = result {
@@ -212,7 +242,9 @@ pub async fn install(
         let tmp = dest.with_extension("part");
         let unpacked = {
             let (gz, tmp) = (gz.clone(), tmp.clone());
-            tokio::task::spawn_blocking(move || gunzip(&gz, &tmp)).await.expect("gunzip task")
+            tokio::task::spawn_blocking(move || gunzip(&gz, &tmp))
+                .await
+                .expect("gunzip task")
         };
         let _ = std::fs::remove_file(&gz);
         unpacked.map_err(AppError::storage)?;
@@ -241,7 +273,11 @@ pub async fn update_yt_dlp(path: &Path) -> Result<String, String> {
     if out.status.success() {
         Ok(stdout)
     } else {
-        Err(String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or("unknown error").to_string())
+        Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .last()
+            .unwrap_or("unknown error")
+            .to_string())
     }
 }
 
@@ -258,13 +294,13 @@ async fn download(
         .timeout(Duration::from_secs(600))
         .send()
         .await
-        .and_then(|r| r.error_for_status())
+        .and_then(reqwest::Response::error_for_status)
         .map_err(|e| e.to_string())?;
     let total = resp.content_length();
     let mut file = std::fs::File::create(dest).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
     let mut received: u64 = 0;
-    let mut last_reported = -1.0f32;
+    let mut last_reported: Option<u8> = None;
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
@@ -272,10 +308,12 @@ async fn download(
         hasher.update(&chunk);
         received += chunk.len() as u64;
         if let Some(total) = total.filter(|t| *t > 0) {
-            let pct = (received as f32 / total as f32 * 100.0).floor();
-            if pct > last_reported {
-                last_reported = pct;
-                on_progress(pct);
+            let pct = u8::try_from(received.saturating_mul(100) / total)
+                .unwrap_or(100)
+                .min(100);
+            if last_reported.is_none_or(|last| pct > last) {
+                last_reported = Some(pct);
+                on_progress(f32::from(pct));
             }
         }
     }
@@ -308,9 +346,16 @@ mod tests {
 
     #[test]
     fn parses_versions() {
-        assert_eq!(parse_version(Tool::YtDlp, "2026.08.19\n").as_deref(), Some("2026.08.19"));
         assert_eq!(
-            parse_version(Tool::Ffmpeg, "ffmpeg version 6.0-static https://x Copyright (c) 2000-2023\n").as_deref(),
+            parse_version(Tool::YtDlp, "2026.08.19\n").as_deref(),
+            Some("2026.08.19")
+        );
+        assert_eq!(
+            parse_version(
+                Tool::Ffmpeg,
+                "ffmpeg version 6.0-static https://x Copyright (c) 2000-2023\n"
+            )
+            .as_deref(),
             Some("6.0-static")
         );
         assert_eq!(parse_version(Tool::Ffmpeg, "garbage"), None);
