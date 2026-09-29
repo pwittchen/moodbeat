@@ -1,3 +1,4 @@
+mod about;
 mod cache;
 mod commands;
 mod config;
@@ -53,6 +54,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(state)
+        .menu(about::app_menu)
+        .on_menu_event(about::on_menu_event)
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { update_yt_dlp_if_due(handle).await });
