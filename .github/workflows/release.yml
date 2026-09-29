@@ -1,0 +1,202 @@
+name: Release
+
+# Pushing a `vX.Y.Z` tag builds moodbeat, signs it with the Developer ID, notarizes it with
+# notarytool and publishes a .dmg to GitHub Releases. Regular pushes (ci.yml) stay unsigned.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Bump version to the tag if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag $GITHUB_REF_NAME is not in the vX.Y.Z format"
+            exit 1
+          fi
+          current=$(sed -n 's/^version = "\(.*\)"$/\1/p' core/Cargo.toml | head -n 1)
+          echo "current version: $current, tag version: $version"
+          export VERSION="$version"
+          # core/Cargo.toml: the first `version =` line is the [package] one.
+          perl -0pi -e 's/^version = "[^"]*"/version = "$ENV{VERSION}"/m' core/Cargo.toml
+          perl -0pi -e 's/(\nname = "moodbeat"\nversion = ")[^"]*/$1$ENV{VERSION}/' core/Cargo.lock
+          # Tauri reads its own `version` (Info.plist CFBundleShortVersionString) from tauri.conf.json.
+          perl -0pi -e 's/^(  "version": ")[^"]*/$1$ENV{VERSION}/m' core/tauri.conf.json package.json
+          perl -0pi -e 's/("name": "moodbeat",\s*"version": ")[^"]*/$1$ENV{VERSION}/g' package-lock.json
+          if git diff --quiet; then
+            echo "version is already $version"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add core/Cargo.toml core/Cargo.lock core/tauri.conf.json package.json package-lock.json
+          git commit -m "bump version to $version"
+          git push origin HEAD:master
+
+  release:
+    needs: version-bump
+    # Apple Silicon runner, built against the macOS 26 SDK: AppKit's title bar button layout is
+    # linked-on-or-after gated, so an older SDK would misplace the traffic lights
+    # (trafficLightPosition in tauri.conf.json) on current macOS.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # master carries the version bump committed by the previous job
+          ref: master
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Installs the version pinned in core/rust-toolchain.toml (same as local builds).
+      - name: Install Rust
+        working-directory: core
+        run: |
+          rustup toolchain install
+          rustup target add aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: release
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # beforeBuildCommand builds the frontend into dist/ before the crate embeds it.
+      - name: Build app
+        run: npx tauri build --target aarch64-apple-darwin --bundles app
+
+      - name: Import Developer ID certificate
+        # Imports the base64-encoded .p12 into a one-shot keychain; removed in the cleanup step.
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/devid.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          echo -n "$MACOS_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/[" ]//g')
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Sign app
+        # Hardened runtime + secure timestamp are required for notarization.
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          app=core/target/aarch64-apple-darwin/release/bundle/macos/moodbeat.app
+          codesign --force --deep --options runtime --timestamp \
+            --entitlements core/entitlements.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      - name: Notarize and staple app
+        # notarytool accepts zip / dmg / pkg, so the .app is submitted as a zip. Stapling the
+        # ticket lets Gatekeeper accept the app offline once it is copied out of the .dmg.
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          app=core/target/aarch64-apple-darwin/release/bundle/macos/moodbeat.app
+          zip="$RUNNER_TEMP/moodbeat-notarize.zip"
+          ditto -c -k --keepParent "$app" "$zip"
+          xcrun notarytool submit "$zip" \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+
+      - name: Package dmg
+        # Built with hdiutil (not Tauri's dmg bundler) so it contains the signed, stapled app.
+        run: |
+          staging=$(mktemp -d)
+          cp -R core/target/aarch64-apple-darwin/release/bundle/macos/moodbeat.app "$staging/"
+          ln -s /Applications "$staging/Applications"
+          # hdiutil occasionally fails with "Resource busy" on GitHub runners, so retry.
+          for attempt in 1 2 3; do
+            hdiutil detach /Volumes/moodbeat -force 2>/dev/null || true
+            if hdiutil create -volname moodbeat -srcfolder "$staging" -ov -format UDZO moodbeat-macos-aarch64.dmg; then
+              exit 0
+            fi
+            echo "::warning::hdiutil create failed (attempt $attempt), retrying in 5s"
+            sleep 5
+          done
+          exit 1
+
+      - name: Sign dmg
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" moodbeat-macos-aarch64.dmg
+          codesign --verify --verbose=2 moodbeat-macos-aarch64.dmg
+
+      - name: Notarize and staple dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit moodbeat-macos-aarch64.dmg \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple moodbeat-macos-aarch64.dmg
+          xcrun stapler validate moodbeat-macos-aarch64.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=2 moodbeat-macos-aarch64.dmg
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+          rm -f "$RUNNER_TEMP/devid.p12"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          previous_tag=$(git tag --list 'v*' --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -n 1)
+          range="$GITHUB_REF_NAME"
+          if [ -n "$previous_tag" ]; then
+            range="$previous_tag..$GITHUB_REF_NAME"
+          fi
+          log=$(git log --pretty=format:'- %s (%h)' "$range" | grep -v '^- bump version to ' || true)
+          {
+            echo 'body<<EOF'
+            echo "$log"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.body }}
+          files: moodbeat-macos-aarch64.dmg
+          fail_on_unmatched_files: true

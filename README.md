@@ -64,6 +64,17 @@ python3 scripts/make-icon.py && npx tauri icon core/icons/app-icon.png -o core/i
 rm -rf core/icons/android core/icons/ios && touch core/build.rs
 ```
 
+## Release
+
+Pushing a `vX.Y.Z` tag runs the [Release](.github/workflows/release.yml) workflow: it bumps the
+version on `master` to match the tag, builds the app for Apple Silicon, signs it with the
+Developer ID, notarizes and staples it, and publishes `moodbeat-macos-aarch64.dmg` to GitHub
+Releases.
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
 ## Legal note
 
 Downloading from YouTube may conflict with YouTube's Terms of Service and with copyright law
