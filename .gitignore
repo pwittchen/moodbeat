@@ -74,3 +74,4 @@ core/gen/schemas/
 .playwright-mcp/
 
 .open_ai_api_key
+.macos-signing/
