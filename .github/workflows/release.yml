@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a `vX.Y.Z` tag builds moodbeat, signs it with the Developer ID, notarizes it with
-# notarytool and publishes a .dmg to GitHub Releases. Regular pushes (ci.yml) stay unsigned.
+# Pushing a `vX.Y.Z` tag builds moodbeat for macOS (signed with the Developer ID and notarized
+# with notarytool, packaged as a .dmg) and for Linux x86_64 / aarch64 (.deb, .rpm, .AppImage), then
+# publishes everything to GitHub Releases. Regular pushes (ci.yml) stay unsigned.
 on:
   push:
     tags:
@@ -54,7 +55,7 @@ jobs:
           git commit -m "bump version to $version"
           git push origin HEAD:master
 
-  release:
+  macos:
     needs: version-bump
     # Apple Silicon runner, built against the macOS 26 SDK: AppKit's title bar button layout is
     # linked-on-or-after gated, so an older SDK would misplace the traffic lights
@@ -178,6 +179,91 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
           rm -f "$RUNNER_TEMP/devid.p12"
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: moodbeat-macos-aarch64
+          path: moodbeat-macos-aarch64.dmg
+          if-no-files-found: error
+
+  linux:
+    needs: version-bump
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Ubuntu 22.04 keeps the glibc floor low so the AppImage and .deb run on older distros.
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # master carries the version bump committed by the version-bump job
+          ref: master
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # patchelf, file and xdg-utils are used by the AppImage bundler; the GStreamer plugins are
+      # copied into the AppImage (bundleMediaFramework) so MP3 playback works without host plugins.
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev \
+            patchelf file xdg-utils rpm \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+
+      # Installs the version pinned in core/rust-toolchain.toml (same as local builds).
+      - name: Install Rust
+        working-directory: core
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: release-${{ matrix.arch }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # beforeBuildCommand builds the frontend into dist/ before the crate embeds it.
+      - name: Build app
+        run: npx tauri build --bundles deb,rpm,appimage
+
+      - name: Collect bundles
+        run: |
+          set -euo pipefail
+          bundle=core/target/release/bundle
+          mkdir -p out
+          cp "$(ls "$bundle"/deb/*.deb)" "out/moodbeat-linux-${{ matrix.arch }}.deb"
+          cp "$(ls "$bundle"/rpm/*.rpm)" "out/moodbeat-linux-${{ matrix.arch }}.rpm"
+          cp "$(ls "$bundle"/appimage/*.AppImage)" "out/moodbeat-linux-${{ matrix.arch }}.AppImage"
+          ls -lh out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: moodbeat-linux-${{ matrix.arch }}
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -198,5 +284,5 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.body }}
-          files: moodbeat-macos-aarch64.dmg
+          files: dist/*
           fail_on_unmatched_files: true

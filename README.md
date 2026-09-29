@@ -67,9 +67,13 @@ rm -rf core/icons/android core/icons/ios && touch core/build.rs
 ## Release
 
 Pushing a `vX.Y.Z` tag runs the [Release](.github/workflows/release.yml) workflow: it bumps the
-version on `master` to match the tag, builds the app for Apple Silicon, signs it with the
-Developer ID, notarizes and staples it, and publishes `moodbeat-macos-aarch64.dmg` to GitHub
-Releases.
+version on `master` to match the tag, builds the app for Apple Silicon (signed with the Developer
+ID, notarized and stapled) and for Linux x86_64 / aarch64, and publishes the bundles to GitHub
+Releases:
+
+- `moodbeat-macos-aarch64.dmg`
+- `moodbeat-linux-{x86_64,aarch64}.deb` / `.rpm` — depend on the distro's GStreamer "good" plugins
+- `moodbeat-linux-{x86_64,aarch64}.AppImage` — bundles GStreamer, runs on most distros
 
 ```sh
 git tag v0.2.0 && git push origin v0.2.0
