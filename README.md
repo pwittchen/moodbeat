@@ -30,6 +30,26 @@
 
 ---
 
+## Download
+
+Get the latest version from the [Releases](https://github.com/pwittchen/moodbeat/releases/latest) page:
+
+| Platform | Download |
+| --- | --- |
+| macOS (Apple Silicon) | [moodbeat-macos-aarch64.dmg](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-macos-aarch64.dmg) |
+| Linux x86_64 | [.AppImage](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-x86_64.AppImage) · [.deb](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-x86_64.deb) · [.rpm](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-x86_64.rpm) |
+| Linux aarch64 | [.AppImage](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-aarch64.AppImage) · [.deb](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-aarch64.deb) · [.rpm](https://github.com/pwittchen/moodbeat/releases/latest/download/moodbeat-linux-aarch64.rpm) |
+
+- **macOS** — open the `.dmg` and drag moodbeat to Applications. The app is signed and notarized.
+- **Linux AppImage** — `chmod +x moodbeat-linux-*.AppImage` and run it. It works on most distros
+  and needs nothing else installed.
+- **Linux .deb / .rpm** — `sudo apt install ./moodbeat-linux-*.deb` or
+  `sudo dnf install ./moodbeat-linux-*.rpm`. This also pulls in the GStreamer plugins needed for
+  playback.
+
+On first launch, enter your OpenAI API key in Settings. The app downloads `yt-dlp` and `ffmpeg`
+into `~/.moodbeat/bin/` automatically if they aren't already on your `PATH`.
+
 ## Requirements
 
 - Rust (stable) and Node.js 20+
