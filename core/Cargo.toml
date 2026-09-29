@@ -1,6 +1,6 @@
 [package]
 name = "moodbeat"
-version = "0.1.0"
+version = "0.2.0"
 description = "Music player that builds a custom playlist from a mood you describe"
 authors = ["Piotr Wittchen"]
 license = "GPL-3.0"
