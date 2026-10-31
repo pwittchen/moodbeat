@@ -1,0 +1,14 @@
+# Accepted cargo-audit advisories. Both come from the GTK3 stack that wry pins on
+# Linux (gtk ^0.18, webkit2gtk =2.0.2), so no moodbeat-side upgrade can clear them.
+# Remove these entries once Tauri/wry moves to glib >= 0.20.
+
+[advisories]
+ignore = [
+    # glib 0.18.5: unsound VariantStrIter. Fixed only in glib >= 0.20.
+    # Not reachable: no crate in the Linux dependency tree uses VariantStrIter or
+    # Variant::array_iter_str, and moodbeat has no direct glib dependency.
+    "RUSTSEC-2024-0429",
+    # proc-macro-error 1.0.4: unmaintained, no patched version exists.
+    # Compile-time only: used by glib-macros and gtk3-macros, not linked into the app.
+    "RUSTSEC-2024-0370",
+]
